@@ -69,8 +69,7 @@ async fn generate_agent_response(pool: &PgPool, session_id: Uuid) -> Result<()> 
 
     // Get provider details
     let provider = llm_providers::db::get_provider_by_id(pool, model.provider_id)
-        .await
-        .map_err(AppError::Database)?
+        .await?
         .ok_or_else(|| AppError::NotFound("Provider not found".to_string()))?;
 
     // Get message history

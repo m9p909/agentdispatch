@@ -37,8 +37,7 @@ pub async fn create_provider(
     };
 
     let provider = db::create_provider(pool, &req)
-        .await
-        .map_err(AppError::Database)?;
+        .await?;
 
     Ok(ProviderResponse {
         id: provider.id,
@@ -50,8 +49,7 @@ pub async fn create_provider(
 
 pub async fn list_providers(pool: &PgPool) -> Result<Vec<ProviderResponse>> {
     let providers = db::list_providers(pool)
-        .await
-        .map_err(AppError::Database)?;
+        .await?;
 
     Ok(providers
         .into_iter()
@@ -66,8 +64,7 @@ pub async fn list_providers(pool: &PgPool) -> Result<Vec<ProviderResponse>> {
 
 pub async fn get_provider_by_id(pool: &PgPool, id: Uuid) -> Result<ProviderResponse> {
     let provider = db::get_provider_by_id(pool, id)
-        .await
-        .map_err(AppError::Database)?
+        .await?
         .ok_or_else(|| AppError::NotFound("Provider not found".to_string()))?;
 
     Ok(ProviderResponse {
@@ -91,8 +88,7 @@ pub async fn update_provider(
     }
 
     let provider = db::update_provider(pool, id, name, r#type, api_key, base_url)
-        .await
-        .map_err(AppError::Database)?;
+        .await?;
 
     Ok(ProviderResponse {
         id: provider.id,
@@ -104,8 +100,7 @@ pub async fn update_provider(
 
 pub async fn delete_provider(pool: &PgPool, id: Uuid) -> Result<()> {
     let rows = db::delete_provider(pool, id)
-        .await
-        .map_err(AppError::Database)?;
+        .await?;
 
     if rows == 0 {
         return Err(AppError::NotFound("Provider not found".to_string()));

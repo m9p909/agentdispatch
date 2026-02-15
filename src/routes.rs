@@ -97,8 +97,7 @@ pub async fn providers_edit(
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse> {
     let provider = llm_providers::db::get_provider_by_id(state.db.get_pool(), id)
-        .await
-        .map_err(AppError::Database)?
+        .await?
         .ok_or_else(|| AppError::NotFound("Provider not found".to_string()))?;
 
     Ok(views::ProvidersForm {
@@ -133,8 +132,7 @@ pub async fn providers_update(
             .body(String::new())?),
         Err(e) => {
             let provider = llm_providers::db::get_provider_by_id(state.db.get_pool(), id)
-                .await
-                .map_err(AppError::Database)?
+                .await?
                 .ok_or_else(|| AppError::NotFound("Provider not found".to_string()))?;
 
             let page = views::ProvidersForm {

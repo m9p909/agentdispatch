@@ -9,6 +9,35 @@ pub async fn create_schema(pool: &PgPool) -> Result<(), sqlx::Error> {
     create_messages_table(pool).await?;
     create_tools_table(pool).await?;
 
+    // Add cascade delete constraint if it doesn't exist
+    add_cascade_delete_constraint(pool).await?;
+
+    Ok(())
+}
+
+async fn add_cascade_delete_constraint(pool: &PgPool) -> Result<(), sqlx::Error> {
+    // Drop the old constraint if it exists
+    let _ = sqlx::query(
+        r#"
+        ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_session_id_fkey
+        "#,
+    )
+    .execute(pool)
+    .await;
+
+    // Add the new constraint with ON DELETE CASCADE
+    let _ = sqlx::query(
+        r#"
+        ALTER TABLE messages
+        ADD CONSTRAINT messages_session_id_fkey
+        FOREIGN KEY (session_id)
+        REFERENCES sessions(id)
+        ON DELETE CASCADE
+        "#,
+    )
+    .execute(pool)
+    .await;
+
     Ok(())
 }
 
@@ -130,7 +159,7 @@ async fn create_messages_table(pool: &PgPool) -> Result<(), sqlx::Error> {
         r#"
         CREATE TABLE IF NOT EXISTS messages (
             id UUID PRIMARY KEY,
-            session_id UUID NOT NULL REFERENCES sessions(id),
+            session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
             role VARCHAR(50) NOT NULL,
             content TEXT NOT NULL,
             timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,

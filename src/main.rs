@@ -1,5 +1,6 @@
 mod agents;
 mod config;
+mod crypto;
 mod db;
 mod error;
 mod handler;
