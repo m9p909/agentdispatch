@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}{% if provider %}Edit{% else %}New{% endif %} Provider - Agent Builder{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>{% if provider %}Edit Provider{% else %}New Provider{% endif %}</h2>
+</div>
+
+<div class="card" style="max-width: 600px;">
+    <form hx-post="{% if provider %}/providers/{{ provider.id }}{% else %}/providers{% endif %}" hx-boost="true">
+        {% if errors %}
+            <div class="alert alert-danger">
+                <strong>Errors:</strong>
+                <ul>
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <div class="form-group">
+            <label for="name">Name *</label>
+            <input type="text" id="name" name="name" required value="{% match provider %}{% when Some with (p) %}{{ p.name }}{% when None %}{% endmatch %}">
+        </div>
+
+        <div class="form-group">
+            <label for="type">Type (e.g., openai, anthropic) *</label>
+            <input type="text" id="type" name="type" required value="{% match provider %}{% when Some with (p) %}{{ p.r#type }}{% when None %}{% endmatch %}">
+        </div>
+
+        <div class="form-group">
+            <label for="api_key">API Key *</label>
+            <input type="password" id="api_key" name="api_key" required {% if provider %}{% else %}placeholder="sk-..."{% endif %}>
+        </div>
+
+        <div class="form-group">
+            <label for="base_url">Base URL (optional)</label>
+            <input type="url" id="base_url" name="base_url" value="{% match provider %}{% when Some with (p) %}{% match p.base_url %}{% when Some with (url) %}{{ url }}{% when None %}{% endmatch %}{% when None %}{% endmatch %}">
+        </div>
+
+        <div style="display: flex; gap: 1rem;">
+            <button type="submit" class="btn btn-success">Save Provider</button>
+            <a href="/providers" class="btn" style="background-color: #95a5a6;" hx-boost="true">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

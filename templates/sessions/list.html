@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+
+{% block title %}Chat Sessions - Agent Builder{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Chat Sessions</h1>
+    <a class="btn btn-primary" href="/sessions/new">New Session</a>
+</div>
+
+{% if sessions.is_empty() %}
+    <div class="alert alert-info">No chat sessions yet. <a href="/sessions/new">Start one.</a></div>
+{% else %}
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Agent</th>
+                <th>Started</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for session in sessions %}
+            <tr>
+                <td>{% match session.title %}{% when Some with (t) %}{{ t }}{% when None %}New Chat{% endmatch %}</td>
+                <td>{{ session.agent_id }}</td>
+                <td>Just now</td>
+                <td>
+                    <a class="btn btn-sm btn-info" href="/sessions/{{ session.id }}/chat">Open</a>
+                    <form class="d-inline" method="POST" action="/sessions/{{ session.id }}/delete" onsubmit="return confirm('Delete this session?')">
+                        <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+{% endblock %}

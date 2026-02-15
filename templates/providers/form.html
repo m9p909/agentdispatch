@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+
+{% block title %}{% if let Some(p) = provider %}Edit{% else %}New{% endif %} Provider - Agent Builder{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <h2>{% if let Some(p) = provider %}Edit Provider{% else %}New Provider{% endif %}</h2>
+
+        {% if !errors.is_empty() %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <strong>Error:</strong>
+            <ul class="mb-0">
+            {% for error in errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{% if let Some(p) = provider %}/providers/{{ p.id }}{% else %}/providers{% endif %}" class="needs-validation">
+            <div class="mb-3">
+                <label class="form-label">Name</label>
+                <input class="form-control" type="text" name="name" value="{% if let Some(p) = provider %}{{ p.name }}{% endif %}" placeholder="My OpenAI Account" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Type</label>
+                <input class="form-control" type="text" name="r#type" value="{% if let Some(p) = provider %}{{ p.provider_type }}{% endif %}" placeholder="OpenAI, Anthropic, etc." required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">API Key</label>
+                <input class="form-control" type="password" name="api_key" placeholder="{% if let Some(p) = provider %}Leave blank to keep existing key{% endif %}" {% if let None = provider %}required{% endif %}>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Base URL (Optional)</label>
+                <input class="form-control" type="url" name="base_url" value="{% if let Some(p) = provider %}{% if let Some(url) = p.base_url %}{{ url }}{% endif %}{% endif %}" placeholder="https://api.example.com">
+            </div>
+
+            <div>
+                <button class="btn btn-primary" type="submit">{% if let Some(p) = provider %}Update{% else %}Create{% endif %}</button>
+                <a class="btn btn-secondary" href="/providers">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

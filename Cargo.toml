@@ -1,0 +1,41 @@
+[package]
+name = "agent-builder"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.35", features = ["full"] }
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+dotenv = "0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+askama = "0.12"
+askama_axum = "0.4"
+anyhow = "1.0"
+thiserror = "1.0"
+log = "0.4"
+env_logger = "0.11"
+regex = "1.10"
+ring = "0.17"
+base64 = "0.21"
+hex = "0.4"
+rand = "0.8"
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[[bin]]
+name = "agent-builder"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true

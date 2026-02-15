@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h2>LLM Providers</h2>
+    <a href="/providers/new" class="btn" hx-boost="true">+ New Provider</a>
+</div>
+
+{% if providers.is_empty() %}
+    <div class="card">
+        <p>No providers yet. <a href="/providers/new" hx-boost="true">Create one</a></p>
+    </div>
+{% else %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Base URL</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for provider in providers %}
+            <tr>
+                <td>{{ provider.name }}</td>
+                <td>{{ provider.r#type }}</td>
+                <td>{{ provider.base_url.as_deref().unwrap_or("N/A") }}</td>
+                <td>
+                    <div class="table-actions">
+                        <a href="/providers/{{ provider.id }}/edit" class="btn" style="padding: 0.5rem 1rem; font-size: 0.875rem;" hx-boost="true">Edit</a>
+                        <button class="btn btn-danger" style="padding: 0.5rem 1rem; font-size: 0.875rem;"
+                            hx-delete="/providers/{{ provider.id }}"
+                            hx-confirm="Are you sure?"
+                            hx-target="body"
+                            hx-swap="outerHTML">Delete</button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}{% if agent %}Edit{% else %}New{% endif %} Agent - Agent Builder{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>{% if agent %}Edit Agent{% else %}New Agent{% endif %}</h2>
+</div>
+
+<div class="card" style="max-width: 600px;">
+    <form hx-post="{% if agent %}/agents/{{ agent.id }}{% else %}/agents{% endif %}" hx-boost="true">
+        {% if errors %}
+            <div class="alert alert-danger">
+                <strong>Errors:</strong>
+                <ul>
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <div class="form-group">
+            <label for="name">Agent Name *</label>
+            <input type="text" id="name" name="name" required value="{% match agent %}{% when Some with (a) %}{{ a.name }}{% when None %}{% endmatch %}">
+        </div>
+
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description">{% match agent %}{% when Some with (a) %}{% match a.description %}{% when Some with (d) %}{{ d }}{% when None %}{% endmatch %}{% when None %}{% endmatch %}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="model_id">Model *</label>
+            <select id="model_id" name="model_id" required>
+                <option value="">Select a model...</option>
+                {% for model in models %}
+                <option value="{{ model.id }}" {% if agent %}{% if agent.model_id == model.id %}selected{% endif %}{% endif %}>{{ model.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="system_prompt">System Prompt *</label>
+            <textarea id="system_prompt" name="system_prompt" required>{% match agent %}{% when Some with (a) %}{{ a.system_prompt }}{% when None %}{% endmatch %}</textarea>
+        </div>
+
+        <div style="display: flex; gap: 1rem;">
+            <button type="submit" class="btn btn-success">Save Agent</button>
+            <a href="/agents" class="btn" style="background-color: #95a5a6;" hx-boost="true">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

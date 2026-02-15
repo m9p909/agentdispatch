@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - Agent Builder{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Chat Session</h2>
+    <a href="/sessions" class="btn" style="background-color: #95a5a6;" hx-boost="true">Back to Sessions</a>
+</div>
+
+<div class="chat-container">
+    <div class="messages-area" id="messages">
+        {% for message in messages %}
+        <div class="message {{ message.role }}">
+            <div class="message-role">{{ message.role | title }}</div>
+            <div>{{ message.content }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="message-input">
+        <form hx-post="/sessions/{{ session.id }}/messages" hx-target="#messages" hx-swap="beforeend" style="display: flex; gap: 0.5rem; flex: 1;">
+            <input type="text" name="content" placeholder="Type your message..." required autocomplete="off">
+            <input type="hidden" name="role" value="user">
+            <button type="submit" class="btn btn-success">Send</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-scroll to bottom when messages update
+    const messagesDiv = document.getElementById('messages');
+    const observer = new MutationObserver(() => {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+    observer.observe(messagesDiv, { childList: true });
+</script>
+{% endblock %}

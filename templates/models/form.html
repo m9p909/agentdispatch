@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+
+{% block title %}{% if let Some(m) = model %}Edit{% else %}New{% endif %} Model - Agent Builder{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <h2>{% if let Some(m) = model %}Edit Model{% else %}New Model{% endif %}</h2>
+
+        {% if !errors.is_empty() %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <strong>Error:</strong>
+            <ul class="mb-0">
+            {% for error in errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{% if let Some(m) = model %}/models/{{ m.id }}{% else %}/models{% endif %}" class="needs-validation">
+            <div class="mb-3">
+                <label class="form-label">Name</label>
+                <input class="form-control" type="text" name="name" value="{% if let Some(m) = model %}{{ m.name }}{% endif %}" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Provider</label>
+                <select class="form-select" name="provider_id" required>
+                    <option value="">Select Provider</option>
+                    {% for provider in providers %}
+                    <option value="{{ provider.id }}" {% if let Some(m) = model %}{% if m.provider_id == provider.id %}selected{% endif %}{% endif %}>{{ provider.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Model Identifier</label>
+                <input class="form-control" type="text" name="model_identifier" value="{% if let Some(m) = model %}{{ m.model_identifier }}{% endif %}" placeholder="e.g., gpt-4, claude-3-opus" required>
+            </div>
+
+            <div>
+                <button class="btn btn-primary" type="submit">{% if let Some(m) = model %}Update{% else %}Create{% endif %}</button>
+                <a class="btn btn-secondary" href="/models">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
