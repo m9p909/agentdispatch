@@ -1,3 +1,1 @@
-pub mod service;
-
-pub use service::*;
+pub mod llm_adapter;

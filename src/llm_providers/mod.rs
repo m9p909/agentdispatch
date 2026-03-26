@@ -1,4 +1,4 @@
 pub mod db;
-pub mod service;
+pub mod provider_service;
 
 pub use db::LlmProvider;

@@ -1,4 +1,4 @@
 pub mod db;
-pub mod service;
+pub mod agent_service;
 
 pub use db::Agent;

@@ -12,11 +12,20 @@ mod routes;
 mod schema;
 mod sessions;
 mod users;
+
+use agents::agent_service::AgentService;
 use config::load_config;
+use crypto::CryptoService;
 use db::Database;
+use llm::llm_adapter::LlmAdapter;
+use llm_models::model_service::ModelService;
+use llm_providers::provider_service::ProviderService;
+use messages::message_service::MessageService;
 use routes::{create_router, AppState};
+use sessions::session_service::SessionService;
 use std::net::SocketAddr;
 use tracing_subscriber;
+use users::user_service::UserService;
 
 #[tokio::main]
 async fn main() {
@@ -46,14 +55,30 @@ async fn main() {
 
     tracing::info!("Database schema initialized");
 
-    let basic_user = users::service::ensure_basic_user(db.get_pool())
+    let crypto = CryptoService::new().expect("Failed to initialize crypto");
+    let llm = LlmAdapter::new();
+
+    let users = UserService::new(db.clone());
+    let providers = ProviderService::new(db.clone(), crypto.clone());
+    let models = ModelService::new(db.clone());
+    let agents = AgentService::new(db.clone());
+    let sessions = SessionService::new(db.clone());
+    let messages = MessageService::new(db.clone(), llm, crypto);
+
+    let basic_user = users
+        .ensure_basic_user()
         .await
         .expect("Failed to seed basic_user");
 
     tracing::info!("Basic user ensured: {:?}", basic_user.id);
 
     let state = AppState {
-        db,
+        users,
+        providers,
+        models,
+        agents,
+        sessions,
+        messages,
         basic_user_id: basic_user.id,
     };
 
@@ -64,7 +89,10 @@ async fn main() {
         .await
         .expect("Failed to bind to address");
 
-    tracing::info!("Server started successfully on http://localhost:{}", config.server.port);
+    tracing::info!(
+        "Server started successfully on http://localhost:{}",
+        config.server.port
+    );
 
     axum::serve(listener, app)
         .await

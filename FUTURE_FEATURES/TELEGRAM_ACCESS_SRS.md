@@ -1163,7 +1163,7 @@ GET /agents/:id/telegram/config
 ### 7.6 References and Related Documents
 
 - [Telegram Bot API Documentation](https://core.telegram.org/bots/api)
-- [Agent Builder Encryption Setup](ENCRYPTION_SETUP.md) - Implementation details
+- [Agent Builder Encryption Setup](../ENCRYPTION_SETUP.md) - Implementation details
 - [PostgreSQL Security Best Practices](https://www.postgresql.org/docs/current/sql-syntax.html)
 - [OWASP Top 10 2023](https://owasp.org/www-project-top-ten/)
 - [Rust Error Handling Best Practices](https://doc.rust-lang.org/book/ch09-00-error-handling.html)

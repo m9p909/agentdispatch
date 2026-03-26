@@ -5,11 +5,12 @@ use chacha20poly1305::{
 use rand::Rng;
 use std::env;
 
-pub struct Cipher {
+#[derive(Clone)]
+pub struct CryptoService {
     key: chacha20poly1305::Key,
 }
 
-impl Cipher {
+impl CryptoService {
     pub fn new() -> Result<Self, String> {
         let key_hex = env::var("ENCRYPTION_KEY").map_err(|_| {
             "ENCRYPTION_KEY not set in environment".to_string()
@@ -25,7 +26,7 @@ impl Cipher {
         let mut key_array = [0u8; 32];
         key_array.copy_from_slice(&key_bytes);
 
-        Ok(Cipher {
+        Ok(CryptoService {
             key: chacha20poly1305::Key::from(key_array),
         })
     }
@@ -75,7 +76,7 @@ mod tests {
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
         env::set_var("ENCRYPTION_KEY", "0".repeat(64));
-        let cipher = Cipher::new().unwrap();
+        let cipher = CryptoService::new().unwrap();
         let plaintext = "my-secret-api-key-12345";
 
         let encrypted = cipher.encrypt(plaintext).unwrap();

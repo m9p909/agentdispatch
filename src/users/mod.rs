@@ -1,4 +1,4 @@
 pub mod db;
-pub mod service;
+pub mod user_service;
 
 pub use db::User;

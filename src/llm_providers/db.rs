@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
-use crate::crypto::Cipher;
+use crate::crypto::CryptoService;
 use crate::error::{AppError, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -24,17 +24,13 @@ pub struct CreateProviderRequest {
     pub base_url: Option<String>,
 }
 
-fn get_cipher() -> Result<Cipher> {
-    Cipher::new().map_err(|e| AppError::Internal(format!("Cipher initialization failed: {}", e)))
-}
-
 fn is_encrypted(value: &str) -> bool {
     // Encrypted keys are hex-encoded and have minimum length (nonce + ciphertext)
     // Minimum: 12 bytes nonce + 16 bytes tag = 28 bytes = 56 hex chars
     value.len() >= 56 && value.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-fn decrypt_if_needed(cipher: &Cipher, value: &str) -> Result<String> {
+fn decrypt_if_needed(cipher: &CryptoService, value: &str) -> Result<String> {
     if is_encrypted(value) {
         cipher.decrypt(value)
             .map_err(|e| AppError::Internal(format!("Decryption failed: {}", e)))
@@ -46,11 +42,11 @@ fn decrypt_if_needed(cipher: &Cipher, value: &str) -> Result<String> {
 pub async fn create_provider(
     pool: &PgPool,
     req: &CreateProviderRequest,
+    cipher: &CryptoService,
 ) -> Result<LlmProvider> {
     let id = Uuid::new_v4();
     let now = Utc::now();
 
-    let cipher = get_cipher()?;
     let encrypted_key = cipher.encrypt(&req.api_key)
         .map_err(|e| AppError::Internal(format!("Encryption failed: {}", e)))?;
 
@@ -76,7 +72,7 @@ pub async fn create_provider(
     Ok(provider)
 }
 
-pub async fn get_provider_by_id(pool: &PgPool, id: Uuid) -> Result<Option<LlmProvider>> {
+pub async fn get_provider_by_id(pool: &PgPool, id: Uuid, cipher: &CryptoService) -> Result<Option<LlmProvider>> {
     let mut provider = sqlx::query_as::<_, LlmProvider>("SELECT * FROM llm_providers WHERE id = $1")
         .bind(id)
         .fetch_optional(pool)
@@ -84,23 +80,20 @@ pub async fn get_provider_by_id(pool: &PgPool, id: Uuid) -> Result<Option<LlmPro
         .map_err(AppError::Database)?;
 
     if let Some(ref mut p) = provider {
-        let cipher = get_cipher()?;
-        p.api_key = decrypt_if_needed(&cipher, &p.api_key)?;
+        p.api_key = decrypt_if_needed(cipher, &p.api_key)?;
     }
 
     Ok(provider)
 }
 
-pub async fn list_providers(pool: &PgPool) -> Result<Vec<LlmProvider>> {
+pub async fn list_providers(pool: &PgPool, cipher: &CryptoService) -> Result<Vec<LlmProvider>> {
     let mut providers = sqlx::query_as::<_, LlmProvider>("SELECT * FROM llm_providers ORDER BY created_at DESC")
         .fetch_all(pool)
         .await
         .map_err(AppError::Database)?;
 
-    let cipher = get_cipher()?;
-
     for p in &mut providers {
-        p.api_key = decrypt_if_needed(&cipher, &p.api_key)?;
+        p.api_key = decrypt_if_needed(cipher, &p.api_key)?;
     }
 
     Ok(providers)
@@ -113,10 +106,10 @@ pub async fn update_provider(
     r#type: &str,
     api_key: &str,
     base_url: Option<&str>,
+    cipher: &CryptoService,
 ) -> Result<LlmProvider> {
     let now = Utc::now();
 
-    let cipher = get_cipher()?;
     let encrypted_key = cipher.encrypt(api_key)
         .map_err(|e| AppError::Internal(format!("Encryption failed: {}", e)))?;
 

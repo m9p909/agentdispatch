@@ -2,6 +2,30 @@ use crate::error::{AppError, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+#[derive(Clone)]
+pub struct LlmAdapter {
+    client: reqwest::Client,
+}
+
+impl LlmAdapter {
+    pub fn new() -> Self {
+        Self {
+            client: reqwest::Client::new(),
+        }
+    }
+
+    pub async fn call_api(
+        &self,
+        api_key: &str,
+        model_identifier: &str,
+        system_prompt: &str,
+        messages: Vec<LlmMessage>,
+        api_endpoint: &str,
+    ) -> Result<LlmResponse> {
+        call_llm_api_with_client(&self.client, api_key, model_identifier, system_prompt, messages, api_endpoint).await
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmMessage {
     pub role: String,
@@ -52,7 +76,8 @@ struct Usage {
     total_tokens: i32,
 }
 
-pub async fn call_llm_api(
+async fn call_llm_api_with_client(
+    client: &reqwest::Client,
     api_key: &str,
     model_identifier: &str,
     system_prompt: &str,
@@ -84,7 +109,6 @@ pub async fn call_llm_api(
         messages: all_messages,
     };
 
-    let client = reqwest::Client::new();
     let url = format!("{}/chat/completions", api_endpoint.trim_end_matches('/'));
 
     tracing::info!("Calling LLM API at: {}", url);
@@ -169,15 +193,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_call_llm_api_empty_api_key() {
-        let result =
-            call_llm_api("", "gpt-4", "prompt", vec![], "https://api.openai.com/v1").await;
+        let adapter = LlmAdapter::new();
+        let result = adapter.call_api("", "gpt-4", "prompt", vec![], "https://api.openai.com/v1").await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_call_llm_api_empty_model() {
-        let result =
-            call_llm_api("test-key", "", "prompt", vec![], "https://api.openai.com/v1").await;
+        let adapter = LlmAdapter::new();
+        let result = adapter.call_api("test-key", "", "prompt", vec![], "https://api.openai.com/v1").await;
         assert!(result.is_err());
     }
 }
