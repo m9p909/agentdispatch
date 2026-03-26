@@ -46,11 +46,11 @@ HTTP → routes.rs → AppState.{service} → db.rs → PostgreSQL
 **Backend module layout** (`src/`):
 
 Each domain (`users`, `llm_providers`, `llm_models`, `agents`, `sessions`, `messages`) has:
-- `mod.rs` — types/structs
-- `<name>_service.rs` — business logic + validation
-- `db.rs` — SQL queries via SQLx
+- `<domain>.rs` — types/structs and re-exports (e.g. `agents.rs`, `users.rs`)
+- `<domain>/<name>_service.rs` — business logic + validation
+- `<domain>/<domain>_db.rs` — SQL queries via SQLx (e.g. `agents/agents_db.rs`, `users/users_db.rs`)
 
-Cross-cutting modules: `crypto.rs` (encryption), `error.rs` (AppError → HTTP), `schema.rs` (DDL), `config.rs` (env vars), `routes.rs` (Axum route wiring).
+Cross-cutting modules: `crypto.rs` (encryption), `error.rs` (AppError → HTTP), `schema.rs` (DDL), `config.rs` (env vars), `routes.rs` (Axum route wiring), `db.rs` (database connection pool).
 
 **Frontend** (`frontend/better-agent-builder/app/`): React Router 7 with React Query for data fetching. `api.ts` is the HTTP client for all backend calls. Routes map to the five main pages: providers → models → agents → sessions → chat.
 
@@ -58,7 +58,7 @@ Cross-cutting modules: `crypto.rs` (encryption), `error.rs` (AppError → HTTP),
 
 - `*Adapter` — wraps an external API (e.g. `LlmAdapter`)
 - `*Service` — domain business logic (e.g. `AgentService`, `MessageService`)
-- `*Db` / `db.rs` — raw SQL query functions
+- `*_db` / `{domain}_db.rs` — raw SQL query functions (e.g. `agents_db.rs`, `users_db.rs`)
 
 ## Environment
 

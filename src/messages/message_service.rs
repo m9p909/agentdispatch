@@ -1,4 +1,4 @@
-use super::db;
+use super::messages_db as db;
 use crate::crypto::CryptoService;
 use crate::db::Database;
 use crate::error::{AppError, Result};
@@ -65,22 +65,22 @@ impl MessageService {
     async fn generate_agent_response(&self, session_id: Uuid) -> Result<()> {
         let pool = self.db.get_pool();
 
-        let session = sessions::db::get_session_by_id(pool, session_id)
+        let session = sessions::sessions_db::get_session_by_id(pool, session_id)
             .await
             .map_err(AppError::Database)?
             .ok_or_else(|| AppError::NotFound("Session not found".to_string()))?;
 
-        let agent = agents::db::get_agent_by_id(pool, session.agent_id)
+        let agent = agents::agents_db::get_agent_by_id(pool, session.agent_id)
             .await
             .map_err(AppError::Database)?
             .ok_or_else(|| AppError::NotFound("Agent not found".to_string()))?;
 
-        let model = llm_models::db::get_model_by_id(pool, agent.model_id)
+        let model = llm_models::models_db::get_model_by_id(pool, agent.model_id)
             .await
             .map_err(AppError::Database)?
             .ok_or_else(|| AppError::NotFound("Model not found".to_string()))?;
 
-        let provider = llm_providers::db::get_provider_by_id(pool, model.provider_id, &self.crypto)
+        let provider = llm_providers::providers_db::get_provider_by_id(pool, model.provider_id, &self.crypto)
             .await?
             .ok_or_else(|| AppError::NotFound("Provider not found".to_string()))?;
 

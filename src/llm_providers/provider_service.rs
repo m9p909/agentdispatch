@@ -1,4 +1,4 @@
-use super::db;
+use super::providers_db as db;
 use crate::crypto::CryptoService;
 use crate::db::Database;
 use crate::error::{AppError, Result};

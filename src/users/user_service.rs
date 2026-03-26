@@ -1,4 +1,4 @@
-use super::db;
+use super::users_db as db;
 use crate::db::Database;
 use crate::error::{AppError, Result};
 

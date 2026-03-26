@@ -1,4 +1,4 @@
-use super::db;
+use super::models_db as db;
 use crate::db::Database;
 use crate::error::{AppError, Result};
 use serde::Serialize;
