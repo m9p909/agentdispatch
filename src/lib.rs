@@ -12,4 +12,3 @@ pub mod routes;
 pub mod schema;
 pub mod sessions;
 pub mod users;
-pub mod views;

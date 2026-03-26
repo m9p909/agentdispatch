@@ -12,8 +12,6 @@ mod routes;
 mod schema;
 mod sessions;
 mod users;
-pub mod views;
-
 use config::load_config;
 use db::Database;
 use routes::{create_router, AppState};

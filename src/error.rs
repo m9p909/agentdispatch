@@ -27,8 +27,6 @@ pub enum AppError {
     #[error("Response error: {0}")]
     Response(#[from] axum::http::Error),
 
-    #[error("Template error: {0}")]
-    Template(#[from] askama::Error),
 }
 
 #[derive(Serialize)]
@@ -57,10 +55,6 @@ impl IntoResponse for AppError {
             AppError::Response(e) => {
                 tracing::error!("Response error: {}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Response error".to_string())
-            }
-            AppError::Template(e) => {
-                tracing::error!("Template error: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Template rendering error".to_string())
             }
         };
 
