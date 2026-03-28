@@ -4,13 +4,14 @@ use crate::llm_models::model_service::ModelService;
 use crate::llm_providers::provider_service::ProviderService;
 use crate::messages::message_service::MessageService;
 use crate::sessions::session_service::SessionService;
+use crate::telegram::telegram_service::TelegramConnectorService;
 use crate::users::user_service::UserService;
 use axum::{
     extract::{Path, State},
     http::{Method, Request, Response, StatusCode},
     middleware::Next,
     response::IntoResponse,
-    routing::get,
+    routing::{delete, get},
     Json, Router,
 };
 use serde::Deserialize;
@@ -25,6 +26,7 @@ pub struct AppState {
     pub agents: AgentService,
     pub sessions: SessionService,
     pub messages: MessageService,
+    pub telegram_connectors: TelegramConnectorService,
     pub basic_user_id: Uuid,
 }
 
@@ -304,6 +306,99 @@ pub async fn messages_create(
     Ok(Json(msgs))
 }
 
+// ===== Telegram Connectors =====
+
+#[derive(Deserialize)]
+pub struct CreateConnectorRequest {
+    pub agent_id: Uuid,
+    pub bot_token: String,
+}
+
+#[derive(Deserialize)]
+pub struct SetEnabledRequest {
+    pub is_enabled: bool,
+}
+
+#[derive(Deserialize)]
+pub struct AddWhitelistRequest {
+    pub telegram_user_id: i64,
+}
+
+pub async fn connectors_list(State(state): State<AppState>) -> Result<impl IntoResponse> {
+    let connectors = state.telegram_connectors.list_connectors().await?;
+    Ok(Json(connectors))
+}
+
+pub async fn connector_get(
+    State(state): State<AppState>,
+    Path(agent_id): Path<Uuid>,
+) -> Result<impl IntoResponse> {
+    let connector = state.telegram_connectors.get_connector(agent_id).await?;
+    Ok(Json(connector))
+}
+
+pub async fn connectors_create(
+    State(state): State<AppState>,
+    Json(body): Json<CreateConnectorRequest>,
+) -> Result<impl IntoResponse> {
+    let connector = state
+        .telegram_connectors
+        .create_connector(body.agent_id, &body.bot_token)
+        .await?;
+    Ok((StatusCode::CREATED, Json(connector)))
+}
+
+pub async fn connector_set_enabled(
+    State(state): State<AppState>,
+    Path(agent_id): Path<Uuid>,
+    Json(body): Json<SetEnabledRequest>,
+) -> Result<impl IntoResponse> {
+    let connector = state
+        .telegram_connectors
+        .set_enabled(agent_id, body.is_enabled)
+        .await?;
+    Ok(Json(connector))
+}
+
+pub async fn connectors_delete(
+    State(state): State<AppState>,
+    Path(agent_id): Path<Uuid>,
+) -> Result<StatusCode> {
+    state.telegram_connectors.delete_connector(agent_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn whitelist_list(
+    State(state): State<AppState>,
+    Path(agent_id): Path<Uuid>,
+) -> Result<impl IntoResponse> {
+    let list = state.telegram_connectors.get_whitelist(agent_id).await?;
+    Ok(Json(list))
+}
+
+pub async fn whitelist_add(
+    State(state): State<AppState>,
+    Path(agent_id): Path<Uuid>,
+    Json(body): Json<AddWhitelistRequest>,
+) -> Result<StatusCode> {
+    state
+        .telegram_connectors
+        .add_whitelist_entry(agent_id, body.telegram_user_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn whitelist_remove(
+    State(state): State<AppState>,
+    Path((agent_id, uid)): Path<(Uuid, i64)>,
+) -> Result<StatusCode> {
+    state
+        .telegram_connectors
+        .remove_whitelist_entry(agent_id, uid)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 // ===== Middleware & Router =====
 
 async fn logging_middleware(
@@ -325,6 +420,7 @@ pub fn create_router(state: AppState) -> Router {
             Method::GET,
             Method::POST,
             Method::PUT,
+            Method::PATCH,
             Method::DELETE,
             Method::OPTIONS,
         ])
@@ -354,6 +450,24 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/sessions/:id/messages",
             get(messages_list).post(messages_create),
+        )
+        .route(
+            "/connectors/telegram",
+            get(connectors_list).post(connectors_create),
+        )
+        .route(
+            "/connectors/telegram/:agent_id",
+            get(connector_get)
+                .patch(connector_set_enabled)
+                .delete(connectors_delete),
+        )
+        .route(
+            "/connectors/telegram/:agent_id/whitelist",
+            get(whitelist_list).post(whitelist_add),
+        )
+        .route(
+            "/connectors/telegram/:agent_id/whitelist/:uid",
+            delete(whitelist_remove),
         );
 
     Router::new()

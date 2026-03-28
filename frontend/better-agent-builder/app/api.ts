@@ -58,6 +58,18 @@ export type CreateAgentData = { model_id: string; name: string; description?: st
 export type UpdateAgentData = CreateAgentData;
 export type CreateSessionData = { agent_id: string; title?: string };
 
+export interface TelegramConnector {
+  id: string;
+  agent_id: string;
+  is_enabled: boolean;
+  masked_token: string;
+  created_at: string;
+}
+
+export type CreateTelegramConnectorData = { agent_id: string; bot_token: string };
+export type SetEnabledData = { is_enabled: boolean };
+export type AddWhitelistData = { telegram_user_id: number };
+
 export const api = {
   providers: {
     list: () => request<Provider[]>("/providers"),
@@ -100,5 +112,35 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ content }),
       }),
+  },
+  telegram: {
+    list: () => request<TelegramConnector[]>("/connectors/telegram"),
+    get: (agentId: string) =>
+      request<TelegramConnector | null>(`/connectors/telegram/${agentId}`),
+    create: (data: CreateTelegramConnectorData) =>
+      request<TelegramConnector>("/connectors/telegram", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    setEnabled: (agentId: string, data: SetEnabledData) =>
+      request<TelegramConnector>(`/connectors/telegram/${agentId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    delete: (agentId: string) =>
+      request<void>(`/connectors/telegram/${agentId}`, { method: "DELETE" }),
+    whitelist: {
+      list: (agentId: string) =>
+        request<number[]>(`/connectors/telegram/${agentId}/whitelist`),
+      add: (agentId: string, data: AddWhitelistData) =>
+        request<void>(`/connectors/telegram/${agentId}/whitelist`, {
+          method: "POST",
+          body: JSON.stringify(data),
+        }),
+      remove: (agentId: string, uid: number) =>
+        request<void>(`/connectors/telegram/${agentId}/whitelist/${uid}`, {
+          method: "DELETE",
+        }),
+    },
   },
 };

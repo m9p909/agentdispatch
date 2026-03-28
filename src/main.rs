@@ -11,6 +11,7 @@ mod messages;
 mod routes;
 mod schema;
 mod sessions;
+mod telegram;
 mod users;
 
 use agents::agent_service::AgentService;
@@ -24,6 +25,11 @@ use messages::message_service::MessageService;
 use routes::{create_router, AppState};
 use sessions::session_service::SessionService;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use telegram::telegram_adapter::TelegramAdapter;
+use telegram::telegram_registry::TelegramRegistry;
+use telegram::telegram_service::TelegramConnectorService;
+use telegram::telegram_supervisor::TelegramSupervisor;
 use tracing_subscriber;
 use users::user_service::UserService;
 
@@ -63,7 +69,7 @@ async fn main() {
     let models = ModelService::new(db.clone());
     let agents = AgentService::new(db.clone());
     let sessions = SessionService::new(db.clone());
-    let messages = MessageService::new(db.clone(), llm, crypto);
+    let messages = MessageService::new(db.clone(), llm, crypto.clone());
 
     let basic_user = users
         .ensure_basic_user()
@@ -72,6 +78,23 @@ async fn main() {
 
     tracing::info!("Basic user ensured: {:?}", basic_user.id);
 
+    let telegram_adapter = TelegramAdapter::new();
+    let registry = Arc::new(TelegramRegistry::new(db.clone()));
+    let telegram_connectors =
+        TelegramConnectorService::new(db.clone(), crypto.clone(), telegram_adapter.clone());
+
+    let supervisor = TelegramSupervisor::new(
+        registry,
+        telegram_adapter,
+        telegram_connectors.clone(),
+        sessions.clone(),
+        messages.clone(),
+        basic_user.id,
+    );
+    supervisor.start();
+
+    tracing::info!("TelegramSupervisor spawned");
+
     let state = AppState {
         users,
         providers,
@@ -79,6 +102,7 @@ async fn main() {
         agents,
         sessions,
         messages,
+        telegram_connectors,
         basic_user_id: basic_user.id,
     };
 

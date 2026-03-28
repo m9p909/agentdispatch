@@ -6,4 +6,5 @@ export default [
   route("providers", "routes/providers.tsx"),
   route("models", "routes/models.tsx"),
   route("agents", "routes/agents.tsx"),
+  route("connectors", "routes/connectors.tsx"),
 ] satisfies RouteConfig;

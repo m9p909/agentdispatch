@@ -59,6 +59,7 @@ export default function App() {
         <NavLink to="/agents" className={navLinkClass}>Agents</NavLink>
         <NavLink to="/models" className={navLinkClass}>Models</NavLink>
         <NavLink to="/providers" className={navLinkClass}>Providers</NavLink>
+        <NavLink to="/connectors" className={navLinkClass}>Connectors</NavLink>
       </nav>
       <main className="p-6 max-w-5xl mx-auto">
         <Outlet />

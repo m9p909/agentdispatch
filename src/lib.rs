@@ -11,4 +11,5 @@ pub mod messages;
 pub mod routes;
 pub mod schema;
 pub mod sessions;
+pub mod telegram;
 pub mod users;

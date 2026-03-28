@@ -8,6 +8,7 @@ pub async fn create_schema(pool: &PgPool) -> Result<(), sqlx::Error> {
     create_sessions_table(pool).await?;
     create_messages_table(pool).await?;
     create_tools_table(pool).await?;
+    create_telegram_tables(pool).await?;
 
     // Add cascade delete constraint if it doesn't exist
     add_cascade_delete_constraint(pool).await?;
@@ -174,6 +175,64 @@ async fn create_messages_table(pool: &PgPool) -> Result<(), sqlx::Error> {
 
     sqlx::query(
         "CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)",
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+async fn create_telegram_tables(pool: &PgPool) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS telegram_configs (
+            id UUID PRIMARY KEY,
+            agent_id UUID NOT NULL UNIQUE REFERENCES agents(id) ON DELETE CASCADE,
+            bot_token TEXT NOT NULL,
+            is_enabled BOOLEAN NOT NULL DEFAULT true,
+            last_update_id BIGINT NOT NULL DEFAULT 0,
+            owner_instance_id TEXT,
+            lease_expires_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_telegram_configs_claimable
+        ON telegram_configs(is_enabled, lease_expires_at)
+        WHERE is_enabled = true
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS telegram_whitelists (
+            id UUID PRIMARY KEY,
+            agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+            telegram_user_id BIGINT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(agent_id, telegram_user_id)
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS telegram_processed_updates (
+            connector_id UUID NOT NULL REFERENCES telegram_configs(id) ON DELETE CASCADE,
+            telegram_message_id BIGINT NOT NULL,
+            PRIMARY KEY (connector_id, telegram_message_id)
+        )
+        "#,
     )
     .execute(pool)
     .await?;
