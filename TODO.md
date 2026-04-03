@@ -1,6 +1,7 @@
 # TODO
 
 ## High priority  (core usability)
+- As a user I need to be able to cancel in progress requests
 - As a user I want anthropic API support
 - As a user I want to be able to connect to remote mcp servers
 - As a user I want the delete of a session to cascade to the messages
