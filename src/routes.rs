@@ -1,8 +1,9 @@
 use crate::agents::agent_service::AgentService;
 use crate::error::Result;
+use crate::llm::tool_registry::ToolRegistry;
 use crate::llm_models::model_service::ModelService;
 use crate::llm_providers::provider_service::ProviderService;
-use crate::messages::message_service::MessageService;
+use crate::messages::message_service::{MessageService, SseEvent};
 use crate::sessions::session_service::SessionService;
 use crate::telegram::telegram_service::TelegramConnectorService;
 use crate::users::user_service::UserService;
@@ -10,10 +11,14 @@ use axum::{
     extract::{Path, State},
     http::{Method, Request, Response, StatusCode},
     middleware::Next,
-    response::IntoResponse,
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        IntoResponse,
+    },
     routing::{delete, get},
     Json, Router,
 };
+use futures_util::StreamExt;
 use serde::Deserialize;
 use tower_http::cors::{Any, CorsLayer};
 use uuid::Uuid;
@@ -27,6 +32,7 @@ pub struct AppState {
     pub sessions: SessionService,
     pub messages: MessageService,
     pub telegram_connectors: TelegramConnectorService,
+    pub tools: ToolRegistry,
     pub basic_user_id: Uuid,
 }
 
@@ -306,6 +312,29 @@ pub async fn messages_create(
     Ok(Json(msgs))
 }
 
+pub async fn messages_stream(
+    State(state): State<AppState>,
+    Path(session_id): Path<Uuid>,
+    Json(body): Json<SendMessageRequest>,
+) -> impl IntoResponse {
+    if body.content.is_empty() {
+        return (StatusCode::BAD_REQUEST, "content required").into_response();
+    }
+    let stream = state
+        .messages
+        .stream_response(session_id, body.content, state.tools);
+    let sse_stream = stream.map(|res| -> std::result::Result<Event, String> {
+        let event = match res {
+            Ok(e) => e,
+            Err(err) => SseEvent::Error { message: err.to_string() },
+        };
+        Ok(Event::default().data(serde_json::to_string(&event).unwrap_or_default()))
+    });
+    Sse::new(sse_stream)
+        .keep_alive(KeepAlive::default())
+        .into_response()
+}
+
 // ===== Telegram Connectors =====
 
 #[derive(Deserialize)]
@@ -451,6 +480,7 @@ pub fn create_router(state: AppState) -> Router {
             "/sessions/:id/messages",
             get(messages_list).post(messages_create),
         )
+        .route("/sessions/:id/stream", axum::routing::post(messages_stream))
         .route(
             "/connectors/telegram",
             get(connectors_list).post(connectors_create),

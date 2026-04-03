@@ -50,6 +50,17 @@ export interface Message {
   content: string;
 }
 
+export interface StreamEvent {
+  type: "token" | "tool_call" | "tool_result" | "done" | "error";
+  delta?: string;
+  id?: string;
+  name?: string;
+  arguments?: string;
+  result?: string;
+  message_id?: string;
+  message?: string;
+}
+
 export type CreateProviderData = { name: string; type: string; api_key: string; base_url?: string };
 export type UpdateProviderData = CreateProviderData;
 export type CreateModelData = { provider_id: string; name: string; model_identifier: string };
@@ -112,6 +123,32 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ content }),
       }),
+    stream: async function* (
+      sessionId: string,
+      content: string,
+      signal?: AbortSignal
+    ): AsyncGenerator<StreamEvent> {
+      const res = await fetch(`${BASE}/sessions/${sessionId}/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+        signal,
+      });
+      if (!res.ok || !res.body) throw new Error(await res.text());
+      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += value;
+        const parts = buf.split("\n\n");
+        buf = parts.pop() ?? "";
+        for (const part of parts) {
+          const line = part.split("\n").find((l) => l.startsWith("data: "));
+          if (line) yield JSON.parse(line.slice(6)) as StreamEvent;
+        }
+      }
+    },
   },
   telegram: {
     list: () => request<TelegramConnector[]>("/connectors/telegram"),

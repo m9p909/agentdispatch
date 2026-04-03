@@ -25,7 +25,11 @@ ring = "0.17"
 base64 = "0.21"
 hex = "0.4"
 rand = "0.8"
-reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
+futures-util = "0.3"
+tokio-stream = "0.1"
+async-stream = "0.3"
+async-trait = "0.1"
 chacha20poly1305 = "0.10"
 
 [dev-dependencies]

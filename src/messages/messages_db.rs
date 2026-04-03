@@ -48,6 +48,38 @@ pub async fn create_message(
     .await
 }
 
+pub struct CreateMessageWithMetaRequest {
+    pub session_id: Uuid,
+    pub role: String,
+    pub content: String,
+    pub metadata: Option<serde_json::Value>,
+}
+
+pub async fn create_message_with_meta(
+    pool: &PgPool,
+    req: &CreateMessageWithMetaRequest,
+) -> Result<Message, sqlx::Error> {
+    let id = Uuid::new_v4();
+    let now = Utc::now();
+    sqlx::query_as::<_, Message>(
+        r#"
+        INSERT INTO messages (id, session_id, role, content, timestamp, metadata, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *
+        "#,
+    )
+    .bind(id)
+    .bind(req.session_id)
+    .bind(&req.role)
+    .bind(&req.content)
+    .bind(now)
+    .bind(&req.metadata)
+    .bind(now)
+    .bind(now)
+    .fetch_one(pool)
+    .await
+}
+
 pub async fn get_message_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Message>, sqlx::Error> {
     sqlx::query_as::<_, Message>("SELECT * FROM messages WHERE id = $1")
         .bind(id)

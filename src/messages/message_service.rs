@@ -2,9 +2,14 @@ use super::messages_db as db;
 use crate::crypto::CryptoService;
 use crate::db::Database;
 use crate::error::{AppError, Result};
-use crate::llm::llm_adapter::{LlmAdapter, LlmMessage};
+use crate::llm::llm_adapter::{LlmAdapter, LlmMessage, LlmToolCall, StreamChunk};
+use crate::llm::tool_registry::{ToolCall, ToolRegistry};
 use crate::{agents, llm_models, llm_providers, sessions};
+use async_stream::try_stream;
+use futures_util::Stream;
+use futures_util::StreamExt;
 use serde::Serialize;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Serialize)]
@@ -13,6 +18,55 @@ pub struct MessageResponse {
     pub session_id: Uuid,
     pub role: String,
     pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SseEvent {
+    Token { delta: String },
+    ToolCall { id: String, name: String, arguments: String },
+    ToolResult { id: String, result: String },
+    Done { message_id: Uuid },
+    Error { message: String },
+}
+
+struct PartialToolCall {
+    id: String,
+    name: String,
+    arguments: String,
+}
+
+struct ToolCallAccumulator {
+    calls: HashMap<usize, PartialToolCall>,
+}
+
+impl ToolCallAccumulator {
+    fn new() -> Self {
+        Self { calls: HashMap::new() }
+    }
+
+    fn feed(&mut self, index: usize, id: Option<String>, name: Option<String>, arguments: Option<String>) {
+        let entry = self.calls.entry(index).or_insert(PartialToolCall {
+            id: String::new(),
+            name: String::new(),
+            arguments: String::new(),
+        });
+        if let Some(i) = id { entry.id = i; }
+        if let Some(n) = name { entry.name = n; }
+        if let Some(a) = arguments { entry.arguments.push_str(&a); }
+    }
+
+    fn finish(self) -> Vec<ToolCall> {
+        let mut calls: Vec<(usize, ToolCall)> = self
+            .calls
+            .into_iter()
+            .map(|(idx, p)| {
+                (idx, ToolCall { id: p.id, name: p.name, arguments: p.arguments })
+            })
+            .collect();
+        calls.sort_by_key(|(idx, _)| *idx);
+        calls.into_iter().map(|(_, c)| c).collect()
+    }
 }
 
 #[derive(Clone)]
@@ -62,6 +116,143 @@ impl MessageService {
         })
     }
 
+    pub fn stream_response(
+        &self,
+        session_id: Uuid,
+        user_content: String,
+        tools: ToolRegistry,
+    ) -> impl Stream<Item = Result<SseEvent>> + Send + 'static {
+        let svc = self.clone();
+        try_stream! {
+            let pool = svc.db.get_pool();
+
+            // 1. Store user message
+            db::create_message(pool, &db::CreateMessageRequest {
+                session_id,
+                role: "user".to_string(),
+                content: user_content,
+            })
+            .await
+            .map_err(AppError::Database)?;
+
+            // 2. Load session → agent → model → provider
+            let session = sessions::sessions_db::get_session_by_id(pool, session_id)
+                .await
+                .map_err(AppError::Database)?
+                .ok_or_else(|| AppError::NotFound("Session not found".to_string()))?;
+
+            let agent = agents::agents_db::get_agent_by_id(pool, session.agent_id)
+                .await
+                .map_err(AppError::Database)?
+                .ok_or_else(|| AppError::NotFound("Agent not found".to_string()))?;
+
+            let model = llm_models::models_db::get_model_by_id(pool, agent.model_id)
+                .await
+                .map_err(AppError::Database)?
+                .ok_or_else(|| AppError::NotFound("Model not found".to_string()))?;
+
+            let provider = llm_providers::providers_db::get_provider_by_id(pool, model.provider_id, &svc.crypto)
+                .await?
+                .ok_or_else(|| AppError::NotFound("Provider not found".to_string()))?;
+
+            let api_key = provider.api_key.clone();
+            let api_endpoint = provider.base_url.clone().unwrap_or_else(|| "https://api.openai.com/v1".to_string());
+            let tool_schemas = tools.get_schemas();
+
+            for _round in 0..10 {
+                // 3. Load history
+                let records = db::get_messages_by_session(pool, session_id)
+                    .await
+                    .map_err(AppError::Database)?;
+
+                let messages = records.into_iter().map(|m| build_llm_message(&m)).collect::<Vec<_>>();
+
+                // 4. Stream from LLM
+                let chunk_stream = svc.llm.stream_api(
+                    api_key.clone(),
+                    model.model_identifier.clone(),
+                    agent.system_prompt.clone(),
+                    messages,
+                    tool_schemas.clone(),
+                    api_endpoint.clone(),
+                );
+
+                let mut content_buf = String::new();
+                let mut acc = ToolCallAccumulator::new();
+                let mut finish = String::new();
+
+                tokio::pin!(chunk_stream);
+                while let Some(chunk) = chunk_stream.next().await {
+                    match chunk? {
+                        StreamChunk::Token(delta) => {
+                            content_buf.push_str(&delta);
+                            yield SseEvent::Token { delta };
+                        }
+                        StreamChunk::ToolCallDelta { index, id, name, arguments } => {
+                            acc.feed(index, id, name, arguments);
+                        }
+                        StreamChunk::FinishReason(reason) => {
+                            finish = reason;
+                        }
+                        StreamChunk::Done => break,
+                    }
+                }
+
+                if finish == "tool_calls" {
+                    let calls = acc.finish();
+                    let tool_calls_json = calls.iter().map(|c| serde_json::json!({
+                        "id": c.id,
+                        "type": "function",
+                        "function": { "name": c.name, "arguments": c.arguments }
+                    })).collect::<Vec<_>>();
+
+                    db::create_message_with_meta(pool, &db::CreateMessageWithMetaRequest {
+                        session_id,
+                        role: "assistant".to_string(),
+                        content: String::new(),
+                        metadata: Some(serde_json::json!({ "tool_calls": tool_calls_json })),
+                    })
+                    .await
+                    .map_err(AppError::Database)?;
+
+                    for call in &calls {
+                        yield SseEvent::ToolCall {
+                            id: call.id.clone(),
+                            name: call.name.clone(),
+                            arguments: call.arguments.clone(),
+                        };
+                        let result = tools.execute(call).await;
+                        db::create_message_with_meta(pool, &db::CreateMessageWithMetaRequest {
+                            session_id,
+                            role: "tool".to_string(),
+                            content: result.output.clone(),
+                            metadata: Some(serde_json::json!({ "tool_call_id": call.id })),
+                        })
+                        .await
+                        .map_err(AppError::Database)?;
+                        yield SseEvent::ToolResult { id: result.id, result: result.output };
+                    }
+                    // continue loop for next round
+                } else {
+                    // finish_reason == "stop" or stream ended
+                    let msg = db::create_message_with_meta(pool, &db::CreateMessageWithMetaRequest {
+                        session_id,
+                        role: "assistant".to_string(),
+                        content: content_buf,
+                        metadata: None,
+                    })
+                    .await
+                    .map_err(AppError::Database)?;
+
+                    yield SseEvent::Done { message_id: msg.id };
+                    return;
+                }
+            }
+
+            yield SseEvent::Error { message: "max tool iterations reached".to_string() };
+        }
+    }
+
     async fn generate_agent_response(&self, session_id: Uuid) -> Result<()> {
         let pool = self.db.get_pool();
 
@@ -92,7 +283,9 @@ impl MessageService {
             .into_iter()
             .map(|m| LlmMessage {
                 role: m.role,
-                content: m.content,
+                content: Some(m.content),
+                tool_calls: None,
+                tool_call_id: None,
             })
             .collect();
 
@@ -177,6 +370,26 @@ impl MessageService {
     }
 }
 
+fn build_llm_message(m: &db::Message) -> LlmMessage {
+    let tool_calls = m.metadata.as_ref().and_then(|meta| {
+        meta.get("tool_calls").and_then(|tc| {
+            serde_json::from_value::<Vec<LlmToolCall>>(tc.clone()).ok()
+        })
+    });
+
+    let tool_call_id = m.metadata.as_ref().and_then(|meta| {
+        meta.get("tool_call_id").and_then(|id| id.as_str()).map(str::to_string)
+    });
+
+    let content = if tool_calls.is_some() {
+        None
+    } else {
+        Some(m.content.clone())
+    };
+
+    LlmMessage { role: m.role.clone(), content, tool_calls, tool_call_id }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,5 +404,18 @@ mod tests {
         };
 
         assert_eq!(resp.role, "assistant");
+    }
+
+    #[test]
+    fn test_tool_call_accumulator() {
+        let mut acc = ToolCallAccumulator::new();
+        acc.feed(0, Some("call_1".to_string()), Some("echo".to_string()), None);
+        acc.feed(0, None, None, Some("{\"text\":\"he".to_string()));
+        acc.feed(0, None, None, Some("llo\"}".to_string()));
+        let calls = acc.finish();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].id, "call_1");
+        assert_eq!(calls[0].name, "echo");
+        assert_eq!(calls[0].arguments, "{\"text\":\"hello\"}");
     }
 }

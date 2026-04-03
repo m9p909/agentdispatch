@@ -1,29 +1,48 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useSession } from "~/hooks/useSessions";
-import { useMessages, useSendMessage } from "~/hooks/useMessages";
+import { useMessages, useStreamChat } from "~/hooks/useMessages";
 import { useAgent } from "~/hooks/useAgents";
+import type { StreamEvent } from "~/api";
+
+function ToolEventBubble({ event }: { event: StreamEvent }) {
+  if (event.type === "tool_call") return (
+    <div className="flex justify-start">
+      <div className="bg-yellow-50 border border-yellow-200 rounded px-3 py-1 text-xs text-yellow-800">
+        🔧 {event.name}({event.arguments})
+      </div>
+    </div>
+  );
+  if (event.type === "tool_result") return (
+    <div className="flex justify-start">
+      <div className="bg-green-50 border border-green-200 rounded px-3 py-1 text-xs text-green-800">
+        ✓ {event.result}
+      </div>
+    </div>
+  );
+  return null;
+}
 
 export default function ChatPage() {
   const { id } = useParams<{ id: string }>();
   const { data: session } = useSession(id!);
   const { data: messages, isLoading } = useMessages(id!);
   const { data: agent } = useAgent(session?.agent_id ?? "");
-  const sendMessage = useSendMessage(id!);
+  const streamChat = useStreamChat(id!);
 
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sendMessage.isPending]);
+  }, [messages, streamChat.streaming, streamChat.toolEvents]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     const content = input.trim();
     if (!content) return;
     setInput("");
-    await sendMessage.mutateAsync(content);
+    await streamChat.send(content);
   }
 
   return (
@@ -57,16 +76,16 @@ export default function ChatPage() {
             </div>
           </div>
         ))}
-        {sendMessage.isPending && (
+        {streamChat.streaming !== null && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 rounded-lg px-4 py-2 text-sm text-gray-500">
-              Thinking...
+            <div className="bg-gray-100 rounded-lg px-4 py-2 text-sm text-gray-900 whitespace-pre-wrap">
+              {streamChat.streaming || <span className="animate-pulse text-gray-400">...</span>}
             </div>
           </div>
         )}
-        {sendMessage.isError && (
-          <p className="text-red-500 text-sm text-center">{sendMessage.error.message}</p>
-        )}
+        {streamChat.toolEvents.map((e, i) => (
+          <ToolEventBubble key={i} event={e} />
+        ))}
         <div ref={bottomRef} />
       </div>
 
@@ -75,12 +94,12 @@ export default function ChatPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type a message..."
-          disabled={sendMessage.isPending}
+          disabled={streamChat.isPending}
           className="flex-1 border rounded px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <button
           type="submit"
-          disabled={sendMessage.isPending || !input.trim()}
+          disabled={streamChat.isPending || !input.trim()}
           className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 text-sm disabled:opacity-50"
         >
           Send

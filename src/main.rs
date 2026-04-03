@@ -19,6 +19,7 @@ use config::load_config;
 use crypto::CryptoService;
 use db::Database;
 use llm::llm_adapter::LlmAdapter;
+use llm::tool_registry::ToolRegistry;
 use llm_models::model_service::ModelService;
 use llm_providers::provider_service::ProviderService;
 use messages::message_service::MessageService;
@@ -63,6 +64,7 @@ async fn main() {
 
     let crypto = CryptoService::new().expect("Failed to initialize crypto");
     let llm = LlmAdapter::new();
+    let tools = ToolRegistry::new();
 
     let users = UserService::new(db.clone());
     let providers = ProviderService::new(db.clone(), crypto.clone());
@@ -103,6 +105,7 @@ async fn main() {
         sessions,
         messages,
         telegram_connectors,
+        tools,
         basic_user_id: basic_user.id,
     };
 

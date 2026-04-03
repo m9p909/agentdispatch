@@ -50,9 +50,9 @@ pub fn load_config() -> Result<AppConfig> {
         dbtype: get_env("DB_TYPE", "postgresql"),
         dbname: get_env("DB_NAME", "agent_builder"),
         host: get_env("DB_HOST", "localhost"),
-        port: get_env("DB_PORT", "5432")
+        port: get_env("DB_PORT", "5433")
             .parse()
-            .unwrap_or(5432),
+            .unwrap_or(5433),
         user: get_env("DB_USER", "postgres"),
         password: get_env("DB_PASSWORD", "postgres"),
     };
