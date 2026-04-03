@@ -1,5 +1,5 @@
 {
-  "name": "better-agent-builder",
+  "name": "agent-dispatch",
   "private": true,
   "type": "module",
   "scripts": {

@@ -16,7 +16,7 @@ cargo fmt            # Format
 
 **Frontend (React/TypeScript):**
 ```bash
-cd frontend/better-agent-builder
+cd frontend/agent-dispatch
 npm run dev          # Dev server
 npm run build        # Production build
 npm run typecheck    # Type check

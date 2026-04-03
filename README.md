@@ -1,4 +1,4 @@
-# Agent Builder
+# AgentDispatch
 
 A self-hosted LLM agent builder with a simple form-based UI. No visual node graphs, no complex setup — just configure your providers, models, and agents, then chat.
 
@@ -63,7 +63,7 @@ cargo run
 ### 4. Run the frontend
 
 ```bash
-cd frontend/better-agent-builder
+cd frontend/agent-dispatch
 npm install
 npm run dev
 ```
