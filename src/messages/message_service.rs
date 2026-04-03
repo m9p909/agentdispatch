@@ -74,11 +74,18 @@ pub struct MessageService {
     pub db: Database,
     pub llm: LlmAdapter,
     pub crypto: CryptoService,
+    // concurrency guard: one active stream per session
+    pub session_guards: std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<Uuid, std::sync::Arc<tokio::sync::Semaphore>>>>,
 }
 
 impl MessageService {
     pub fn new(db: Database, llm: LlmAdapter, crypto: CryptoService) -> Self {
-        Self { db, llm, crypto }
+        Self {
+            db,
+            llm,
+            crypto,
+            session_guards: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+        }
     }
 
     pub async fn create_message(
@@ -126,7 +133,24 @@ impl MessageService {
         try_stream! {
             let pool = svc.db.get_pool();
 
-            // 1. Store user message
+            // 0. Concurrency guard per session (single active stream)
+            let permit = {
+                let mut guards = svc.session_guards.lock().await;
+                let sem = guards.entry(session_id)
+                    .or_insert_with(|| std::sync::Arc::new(tokio::sync::Semaphore::new(1)))
+                    .clone();
+                match sem.clone().try_acquire_owned() {
+                    Ok(p) => Some(p),
+                    Err(_) => None,
+                }
+            };
+            if permit.is_none() {
+                yield SseEvent::Error { message: "another stream is already active for this session".to_string() };
+                return;
+            }
+            let _permit = permit; // held until stream ends
+
+            // 1. Store user message (only after guard acquired)
             db::create_message(pool, &db::CreateMessageRequest {
                 session_id,
                 role: "user".to_string(),
@@ -182,19 +206,39 @@ impl MessageService {
                 let mut finish = String::new();
 
                 tokio::pin!(chunk_stream);
-                while let Some(chunk) = chunk_stream.next().await {
-                    match chunk? {
-                        StreamChunk::Token(delta) => {
+                while let Some(chunk_res) = chunk_stream.next().await {
+                    match chunk_res {
+                        Ok(StreamChunk::Token(delta)) => {
                             content_buf.push_str(&delta);
                             yield SseEvent::Token { delta };
                         }
-                        StreamChunk::ToolCallDelta { index, id, name, arguments } => {
+                        Ok(StreamChunk::ToolCallDelta { index, id, name, arguments }) => {
                             acc.feed(index, id, name, arguments);
                         }
-                        StreamChunk::FinishReason(reason) => {
+                        Ok(StreamChunk::FinishReason(reason)) => {
                             finish = reason;
                         }
-                        StreamChunk::Done => break,
+                        Ok(StreamChunk::Done) => break,
+                        Err(err) => {
+                            // Persist partial content if any, annotate with error
+
+                            let mut saved_id: Option<Uuid> = None;
+                            if !content_buf.is_empty() {
+                                let msg = db::create_message_with_meta(pool, &db::CreateMessageWithMetaRequest {
+                                    session_id,
+                                    role: "assistant".to_string(),
+                                    content: content_buf.clone(),
+                                    metadata: Some(serde_json::json!({ "error": err.to_string() })),
+                                })
+                                .await
+                                .map_err(AppError::Database)?;
+                                saved_id = Some(msg.id);
+                            }
+                            // Notify UI of error, then Done to close
+                            yield SseEvent::Error { message: err.to_string() };
+                            yield SseEvent::Done { message_id: saved_id.unwrap_or_else(Uuid::nil) };
+                            return;
+                        }
                     }
                 }
 
@@ -249,7 +293,10 @@ impl MessageService {
                 }
             }
 
+            // Emit an error then a terminal done so the UI can clear streaming state
             yield SseEvent::Error { message: "max tool iterations reached".to_string() };
+            yield SseEvent::Done { message_id: Uuid::nil() };
+            return;
         }
     }
 

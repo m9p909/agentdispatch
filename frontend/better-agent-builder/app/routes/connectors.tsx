@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAgents } from "~/hooks/useAgents";
+import { useAgents } from "~/hooks/adapters/useAgents";
 import {
   useTelegramConnectors,
   useCreateTelegramConnector,
@@ -8,7 +8,7 @@ import {
   useTelegramWhitelist,
   useAddWhitelistEntry,
   useRemoveWhitelistEntry,
-} from "~/hooks/useTelegramConnectors";
+} from "~/hooks/adapters/useTelegramConnectors";
 import type { TelegramConnector } from "~/api";
 
 // ===== Whitelist manager for a single connector =====

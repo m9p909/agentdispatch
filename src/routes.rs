@@ -320,14 +320,21 @@ pub async fn messages_stream(
     if body.content.is_empty() {
         return (StatusCode::BAD_REQUEST, "content required").into_response();
     }
+
+    // Simple ownership check: ensure the session belongs to the basic_user_id
+    if let Ok(session) = state.sessions.get_session_by_id(session_id).await {
+        if session.user_id != state.basic_user_id {
+            return (StatusCode::FORBIDDEN, "forbidden").into_response();
+        }
+    } else {
+        return (StatusCode::NOT_FOUND, "session not found").into_response();
+    }
+
     let stream = state
         .messages
         .stream_response(session_id, body.content, state.tools);
     let sse_stream = stream.map(|res| -> std::result::Result<Event, String> {
-        let event = match res {
-            Ok(e) => e,
-            Err(err) => SseEvent::Error { message: err.to_string() },
-        };
+        let event = res.unwrap_or_else(|err| SseEvent::Error { message: err.to_string() });
         Ok(Event::default().data(serde_json::to_string(&event).unwrap_or_default()))
     });
     Sse::new(sse_stream)

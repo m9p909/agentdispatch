@@ -138,25 +138,29 @@ fn build_message_json(m: &LlmMessage) -> serde_json::Value {
 }
 
 fn parse_stream_chunks(v: &serde_json::Value) -> Vec<StreamChunk> {
-    let choices = v.get("choices")?.as_array()?;
-    let choice = choices.first()?;
+    let mut out = Vec::new();
+    let choices = match v.get("choices").and_then(|c| c.as_array()) {
+        Some(c) => c,
+        None => return out,
+    };
+    let choice = match choices.first() {
+        Some(c) => c,
+        None => return out,
+    };
 
-    if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
-        if !reason.is_empty() {
-            return Some(StreamChunk::FinishReason(reason.to_string()));
-        }
-    }
-
-    let delta = choice.get("delta")?;
+    let delta = match choice.get("delta") {
+        Some(d) => d,
+        None => return out,
+    };
 
     if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
         if !content.is_empty() {
-            return Some(StreamChunk::Token(content.to_string()));
+            out.push(StreamChunk::Token(content.to_string()));
         }
     }
 
     if let Some(tool_calls) = delta.get("tool_calls").and_then(|t| t.as_array()) {
-        if let Some(tc) = tool_calls.first() {
+        for tc in tool_calls {
             let index = tc.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
             let id = tc.get("id").and_then(|i| i.as_str()).map(str::to_string);
             let name = tc
@@ -169,11 +173,17 @@ fn parse_stream_chunks(v: &serde_json::Value) -> Vec<StreamChunk> {
                 .and_then(|f| f.get("arguments"))
                 .and_then(|a| a.as_str())
                 .map(str::to_string);
-            return Some(StreamChunk::ToolCallDelta { index, id, name, arguments });
+            out.push(StreamChunk::ToolCallDelta { index, id, name, arguments });
         }
     }
 
-    None
+    if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
+        if !reason.is_empty() {
+            out.push(StreamChunk::FinishReason(reason.to_string()));
+        }
+    }
+
+    out
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

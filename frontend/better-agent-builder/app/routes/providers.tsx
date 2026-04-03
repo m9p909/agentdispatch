@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useProviders, useCreateProvider, useUpdateProvider, useDeleteProvider } from "~/hooks/useProviders";
+import { useProviders, useCreateProvider, useUpdateProvider, useDeleteProvider } from "~/hooks/adapters/useProviders";
 import type { Provider, CreateProviderData } from "~/api";
 
 type FormState = { name: string; type: string; api_key: string; base_url: string };

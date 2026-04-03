@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useModels, useCreateModel, useUpdateModel, useDeleteModel } from "~/hooks/useModels";
-import { useProviders } from "~/hooks/useProviders";
+import { useModels, useCreateModel, useUpdateModel, useDeleteModel } from "~/hooks/adapters/useModels";
+import { useProviders } from "~/hooks/adapters/useProviders";
 import type { Model, CreateModelData } from "~/api";
 
 type FormState = { provider_id: string; name: string; model_identifier: string };

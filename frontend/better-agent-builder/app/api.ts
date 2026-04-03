@@ -128,6 +128,7 @@ export const api = {
       content: string,
       signal?: AbortSignal
     ): AsyncGenerator<StreamEvent> {
+      const { createParser } = await import("eventsource-parser");
       const res = await fetch(`${BASE}/sessions/${sessionId}/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -135,18 +136,28 @@ export const api = {
         signal,
       });
       if (!res.ok || !res.body) throw new Error(await res.text());
+
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-      let buf = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += value;
-        const parts = buf.split("\n\n");
-        buf = parts.pop() ?? "";
-        for (const part of parts) {
-          const line = part.split("\n").find((l) => l.startsWith("data: "));
-          if (line) yield JSON.parse(line.slice(6)) as StreamEvent;
+      const events: StreamEvent[] = [];
+      const parser = createParser({
+        onEvent: (e) => {
+          try {
+            events.push(JSON.parse(e.data) as StreamEvent);
+          } catch {
+            events.push({ type: "error", message: `Malformed SSE JSON: ${e.data}` });
+          }
+        },
+      });
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          parser.feed(value);
+          yield* events.splice(0);
         }
+      } finally {
+        reader.releaseLock();
       }
     },
   },

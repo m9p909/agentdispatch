@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useAgents, useCreateAgent, useUpdateAgent, useDeleteAgent } from "~/hooks/useAgents";
-import { useModels } from "~/hooks/useModels";
+import { useAgents, useCreateAgent, useUpdateAgent, useDeleteAgent } from "~/hooks/adapters/useAgents";
+import { useModels } from "~/hooks/adapters/useModels";
 import type { Agent, CreateAgentData } from "~/api";
 
 type FormState = { model_id: string; name: string; description: string; system_prompt: string };

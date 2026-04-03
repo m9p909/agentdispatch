@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { useSessions, useCreateSession, useDeleteSession } from "~/hooks/useSessions";
-import { useAgents } from "~/hooks/useAgents";
+import { useSessions, useCreateSession, useDeleteSession } from "~/hooks/adapters/useSessions";
+import { useAgents } from "~/hooks/adapters/useAgents";
 
 export default function SessionsPage() {
   const { data: sessions, isLoading, error } = useSessions();
