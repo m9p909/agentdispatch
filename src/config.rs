@@ -30,6 +30,7 @@ pub struct AppConfig {
     pub server: ServerConfig,
     pub db: DbConfig,
     pub hikari: HikariConfig,
+    pub max_output_tokens: u32,
 }
 
 fn get_env(key: &str, default: &str) -> String {
@@ -64,10 +65,19 @@ pub fn load_config() -> Result<AppConfig> {
         max_lifetime: 1800000,
     };
 
+    let max_output_tokens: u32 = get_env("MAX_OUTPUT_TOKENS", "4096")
+        .parse()
+        .unwrap_or_else(|_| {
+            tracing::warn!("MAX_OUTPUT_TOKENS is not a valid number, using default 4096");
+            4096
+        })
+        .max(1);
+
     tracing::info!("Database config loaded: host={}, port={}, dbname={}, user={}",
         db.host, db.port, db.dbname, db.user);
+    tracing::info!("Max output tokens: {}", max_output_tokens);
 
-    Ok(AppConfig { server, db, hikari })
+    Ok(AppConfig { server, db, hikari, max_output_tokens })
 }
 
 #[cfg(test)]
@@ -102,5 +112,25 @@ mod tests {
         };
         assert_eq!(config.dbname, "agent_builder");
         assert_eq!(config.port, 5432);
+    }
+
+    #[test]
+    fn test_max_output_tokens_default() {
+        let tokens: u32 = get_env("MAX_OUTPUT_TOKENS_NONEXISTENT", "4096")
+            .parse()
+            .unwrap_or(4096);
+        assert_eq!(tokens, 4096);
+    }
+
+    #[test]
+    fn test_max_output_tokens_parse_invalid_falls_back() {
+        let tokens: u32 = "not_a_number".parse().unwrap_or(4096);
+        assert_eq!(tokens, 4096);
+    }
+
+    #[test]
+    fn test_max_output_tokens_zero_becomes_one() {
+        let tokens: u32 = "0".parse::<u32>().unwrap_or(4096).max(1);
+        assert_eq!(tokens, 1);
     }
 }

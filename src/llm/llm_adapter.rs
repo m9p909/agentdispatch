@@ -9,16 +9,17 @@ use std::time::Duration;
 #[derive(Clone)]
 pub struct LlmAdapter {
     client: reqwest::Client,
+    max_tokens: u32,
 }
 
 impl LlmAdapter {
-    pub fn new() -> Self {
+    pub fn new(max_tokens: u32) -> Self {
         let client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(30))
             .timeout(Duration::from_secs(300))
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
-        Self { client }
+        Self { client, max_tokens }
     }
 
     pub async fn call_api(
@@ -36,6 +37,7 @@ impl LlmAdapter {
             system_prompt,
             messages,
             api_endpoint,
+            self.max_tokens,
         )
         .await
     }
@@ -50,6 +52,7 @@ impl LlmAdapter {
         api_endpoint: String,
     ) -> impl Stream<Item = Result<StreamChunk>> + Send + 'static {
         let client = self.client.clone();
+        let max_tokens = self.max_tokens;
         try_stream! {
             let url = format!("{}/chat/completions", api_endpoint.trim_end_matches('/'));
 
@@ -65,6 +68,7 @@ impl LlmAdapter {
                 "model": model_identifier,
                 "messages": all_messages,
                 "stream": true,
+                "max_tokens": max_tokens,
             });
             if !tool_schemas.is_empty() {
                 body["tools"] = serde_json::Value::Array(tool_schemas);
@@ -238,6 +242,7 @@ pub enum StreamChunk {
 struct ChatCompletionRequest {
     model: String,
     messages: Vec<ChatMessage>,
+    max_tokens: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -272,6 +277,7 @@ async fn call_llm_api_with_client(
     system_prompt: &str,
     messages: Vec<LlmMessage>,
     api_endpoint: &str,
+    max_tokens: u32,
 ) -> Result<LlmResponse> {
     if api_key.is_empty() {
         return Err(AppError::Validation("API key is required".to_string()));
@@ -296,6 +302,7 @@ async fn call_llm_api_with_client(
     let request = ChatCompletionRequest {
         model: model_identifier.to_string(),
         messages: all_messages,
+        max_tokens,
     };
 
     let url = format!("{}/chat/completions", api_endpoint.trim_end_matches('/'));
@@ -395,7 +402,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_call_llm_api_empty_api_key() {
-        let adapter = LlmAdapter::new();
+        let adapter = LlmAdapter::new(4096);
         let result = adapter
             .call_api("", "gpt-4", "prompt", vec![], "https://api.openai.com/v1")
             .await;
@@ -404,7 +411,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_call_llm_api_empty_model() {
-        let adapter = LlmAdapter::new();
+        let adapter = LlmAdapter::new(4096);
         let result = adapter
             .call_api(
                 "test-key",
@@ -415,5 +422,22 @@ mod tests {
             )
             .await;
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_llm_adapter_stores_max_tokens() {
+        let adapter = LlmAdapter::new(512);
+        assert_eq!(adapter.max_tokens, 512);
+    }
+
+    #[test]
+    fn test_chat_completion_request_includes_max_tokens() {
+        let req = ChatCompletionRequest {
+            model: "gpt-4".to_string(),
+            messages: vec![],
+            max_tokens: 100,
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["max_tokens"], 100);
     }
 }

@@ -63,7 +63,7 @@ async fn main() {
     tracing::info!("Database schema initialized");
 
     let crypto = CryptoService::new().expect("Failed to initialize crypto");
-    let llm = LlmAdapter::new();
+    let llm = LlmAdapter::new(config.max_output_tokens);
     let tools = ToolRegistry::new();
 
     let users = UserService::new(db.clone());
