@@ -77,6 +77,7 @@ impl Tool for EchoTool {
     }
 
     async fn execute(&self, arguments: &str) -> String {
+        tracing::info!(arguments, "echo tool called");
         match serde_json::from_str::<serde_json::Value>(arguments) {
             Ok(v) => v
                 .get("text")

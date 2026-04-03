@@ -45,11 +45,11 @@ function applyStreamEvent(timeline: TimelineItem[], event: StreamEvent): Timelin
   if (event.type === "tool_call") return [...timeline, { kind: "tool_call", event }];
   if (event.type === "tool_result") return [...timeline, { kind: "tool_result", event }];
   if (event.type === "done") {
-    const withoutTokens = timeline.filter((item) => item.kind !== "tokens");
+    const withoutStreaming = timeline.filter((item) => item.kind !== "tokens" && item.kind !== "tool_call" && item.kind !== "tool_result");
     const tokensItem = timeline.find((item) => item.kind === "tokens") as { kind: "tokens"; text: string } | undefined;
     const content = tokensItem?.text ?? "";
     const id = event.message_id ?? `local-${Date.now()}`;
-    return [...withoutTokens, { kind: "message", id, role: "assistant", content }];
+    return [...withoutStreaming, { kind: "message", id, role: "assistant", content }];
   }
   if (event.type === "error") {
     return [...timeline.filter((item) => item.kind !== "tokens"), { kind: "error", message: event.message ?? "Unknown error" }];
@@ -59,12 +59,16 @@ function applyStreamEvent(timeline: TimelineItem[], event: StreamEvent): Timelin
 
 function reducer(state: ManagerState, action: Action): ManagerState {
   switch (action.type) {
-    case "SEED":
+    case "SEED": {
+      const visible = action.messages.filter(
+        (m) => m.role !== "tool" && !(m.role === "assistant" && m.content === "")
+      );
       return {
         ...state,
         seeded: true,
-        timeline: action.messages.map((m) => ({ kind: "message", id: m.id, role: m.role, content: m.content })),
+        timeline: visible.map((m) => ({ kind: "message", id: m.id, role: m.role, content: m.content })),
       };
+    }
     case "ENQUEUE":
       return {
         ...state,

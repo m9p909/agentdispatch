@@ -346,22 +346,13 @@ async fn process_update(
         }
     });
 
-    // Store the user message and trigger the LLM response
-    let create_result = message_service.create_message(session_id, "user", &text).await;
+    // Run the full streaming + agentic loop, collect the final assistant text
+    let ai_response = message_service.stream_to_text(session_id, text).await;
     typing_handle.abort();
-    create_result?;
-
-    // Fetch messages and return the latest assistant reply to Telegram
-    let messages = message_service.get_messages_by_session(session_id).await?;
-    let ai_response = messages
-        .iter()
-        .filter(|m| m.role == "assistant")
-        .last()
-        .map(|m| m.content.as_str())
-        .unwrap_or("Message received.");
+    let ai_response = ai_response?;
 
     telegram
-        .send_message(decrypted_token, chat_id, ai_response)
+        .send_message(decrypted_token, chat_id, &ai_response)
         .await?;
 
     tracing::info!(
